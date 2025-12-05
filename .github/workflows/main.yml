@@ -52,7 +52,49 @@ jobs:
           echo "VM already exists. Skipping."
         fi
 
-        --query "[?contains(destinationPortRange, '22')]"
+             - name: Open SSH and HTTP only if needed
+        run: |
+          # Get NSG name dynamically (Azure auto-names it)
+          NSG=$(az network nsg list -g owasp-wp-rg --query "[].name" -o tsv)
+
+          echo "Detected NSG: $NSG"
+
+          echo "Checking SSH rule..."
+          SSH_RULE=$(az network nsg rule list \
+              --resource-group owasp-wp-rg \
+              --nsg-name "$NSG" \
+              --query "[?contains(destinationPortRange, '22')]" \
+              -o tsv)
+
+          if [ -z "$SSH_RULE" ]; then
+            echo "Opening port 22..."
+            az vm open-port \
+              --resource-group owasp-wp-rg \
+              --name owaspwpvm \
+              --port 22 \
+              --priority 1001
+          else
+            echo "Port 22 already open."
+          fi
+
+          echo "Checking HTTP rule..."
+          HTTP_RULE=$(az network nsg rule list \
+              --resource-group owasp-wp-rg \
+              --nsg-name "$NSG" \
+              --query "[?contains(destinationPortRange, '80')]" \
+              -o tsv)
+
+          if [ -z "$HTTP_RULE" ]; then
+            echo "Opening port 80..."
+            az vm open-port \
+              --resource-group owasp-wp-rg \
+              --name owaspwpvm \
+              --port 80 \
+              --priority 1002
+          else
+            echo "Port 80 already open."
+          fi
+
 
     # -------------------------------
     # Output Public IP
