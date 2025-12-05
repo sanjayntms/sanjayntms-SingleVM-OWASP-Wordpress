@@ -23,7 +23,7 @@ jobs:
     - name: Create Resource Group if not exists
       run: |
         if ! az group exists --name owasp-wp-rg; then
-          az group create --name owasp-wp-rg --location centralindia
+          az group create --name owasp-wp-rg --location northeurope
         fi
 
     # Create VM (idempotent)
@@ -34,7 +34,7 @@ jobs:
             --resource-group owasp-wp-rg \
             --name owaspwpvm \
             --image Ubuntu2204 \
-            --size Standard_B1s \
+            --size Standard_D2ls_v5 \
             --admin-username azureuser \
             --admin-password "${{ secrets.VM_ADMIN_PASSWORD }}" \
             --authentication-type password \
