@@ -42,15 +42,17 @@ jobs:
         run: |
           az vm open-port \
             --resource-group owasp-wp-rg \
-            --name owaspwpvm \
+            --name owaspwpvm22 \
             --port 22
+            --priority 299
 
       - name: Open Port 80 (WordPress)
         run: |
           az vm open-port \
             --resource-group owasp-wp-rg \
-            --name owaspwpvm \
+            --name owaspwpvm80 \
             --port 80
+            --priority 400
 
       - name: Output Public IP
         run: |
