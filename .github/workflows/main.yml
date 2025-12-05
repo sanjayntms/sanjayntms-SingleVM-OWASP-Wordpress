@@ -74,3 +74,16 @@ jobs:
         echo " Username: admin"
         echo " Password: Admin123!"
         echo "====================================="
+
+    - name: Upload OWASP Lab Page Script
+      run: |
+        sshpass -p "${{ secrets.VM_ADMIN_PASSWORD }}" \
+        scp -o StrictHostKeyChecking=no create-owasp-lab-page.sh azureuser@${{ steps.ip.outputs.IP }}:/tmp/
+
+    - name: Run OWASP Lab Page Script
+      run: |
+        sshpass -p "${{ secrets.VM_ADMIN_PASSWORD }}" \
+        ssh -o StrictHostKeyChecking=no azureuser@${{ steps.ip.outputs.IP }} \
+        "chmod +x /tmp/create-owasp-lab-page.sh && sudo /tmp/create-owasp-lab-page.sh"
+
+
