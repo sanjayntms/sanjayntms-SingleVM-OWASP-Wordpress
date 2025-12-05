@@ -15,12 +15,12 @@ sudo systemctl enable apache2
 sudo systemctl start apache2
 sudo systemctl restart apache2
 
-echo "=== Securing MySQL (if needed) ==="
+echo "=== Starting MySQL ==="
 sudo systemctl enable mysql
 sudo systemctl start mysql
 sleep 5
 
-echo "=== Creating Database and User ==="
+echo "=== Creating DB and User ==="
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS wpdb;"
 sudo mysql -e "CREATE USER IF NOT EXISTS 'wpuser'@'localhost' IDENTIFIED BY 'Password123!';"
 sudo mysql -e "GRANT ALL PRIVILEGES ON wpdb.* TO 'wpuser'@'localhost';"
@@ -28,12 +28,15 @@ sudo mysql -e "FLUSH PRIVILEGES;"
 
 echo "=== Downloading WordPress ==="
 sudo wget -q https://wordpress.org/latest.zip -O /tmp/wordpress.zip
-sudo unzip -q /tmp/wordpress.zip -d /tmp/
+
+echo "=== Extracting WordPress (non-interactive) ==="
+sudo rm -rf /tmp/wordpress
+sudo unzip -o -q /tmp/wordpress.zip -d /tmp/
 
 echo "=== Removing Apache default content ==="
 sudo rm -rf /var/www/html/*
 
-echo "=== Copying WordPress files ==="
+echo "=== Copying WordPress ==="
 sudo cp -r /tmp/wordpress/* /var/www/html/
 
 echo "=== Installing WP-CLI ==="
@@ -41,12 +44,11 @@ curl -s -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.
 chmod +x wp-cli.phar
 sudo mv wp-cli.phar /usr/local/bin/wp
 
-echo "=== Setting correct permissions ==="
+echo "=== Setting permissions ==="
 sudo chown -R www-data:www-data /var/www/html
 sudo find /var/www/html -type d -exec chmod 755 {} \;
 sudo find /var/www/html -type f -exec chmod 644 {} \;
 
-echo "=== Fetching Public IP ==="
 IP=$(curl -s ifconfig.me)
 
 echo "=== Generating wp-config.php ==="
@@ -58,7 +60,7 @@ sudo -u www-data wp config create \
   --dbhost=localhost \
   --skip-check --force
 
-echo "=== Running Silent WordPress Installation ==="
+echo "=== Running WordPress installation ==="
 sudo -u www-data wp core install \
   --path=/var/www/html \
   --url="http://$IP" \
@@ -67,7 +69,7 @@ sudo -u www-data wp core install \
   --admin_password="Admin123!" \
   --admin_email="admin@example.com"
 
-echo "=== Fixing permissions after install ==="
+echo "=== Fixing permissions ==="
 sudo chown -R www-data:www-data /var/www/html
 sudo chmod -R 755 /var/www/html
 
