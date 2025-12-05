@@ -52,34 +52,7 @@ jobs:
           echo "VM already exists. Skipping."
         fi
 
-    # -------------------------------
-    # Open ports (idempotent)
-    # -------------------------------
-    - name: Open SSH and HTTP only if needed
-      run: |
-        # Check if SSH rule exists
-        if ! az network nsg rule list \
-           --resource-group owasp-wp-rg \
-           --nsg-name owaspwpvmNSG \
-           --query "[?name=='allow_22']" \
-           | grep -q allow_22; then
-          echo "Opening port 22..."
-          az vm open-port --resource-group owasp-wp-rg --name owaspwpvm --port 22 --priority 1001 --rule-name allow_22
-        else
-          echo "Port 22 already open."
-        fi
-
-        # Check if HTTP rule exists
-        if ! az network nsg rule list \
-           --resource-group owasp-wp-rg \
-           --nsg-name owaspwpvmNSG \
-           --query "[?name=='allow_80']" \
-           | grep -q allow_80; then
-          echo "Opening port 80..."
-          az vm open-port --resource-group owasp-wp-rg --name owaspwpvm --port 80 --priority 1002 --rule-name allow_80
-        else
-          echo "Port 80 already open."
-        fi
+        --query "[?contains(destinationPortRange, '22')]"
 
     # -------------------------------
     # Output Public IP
