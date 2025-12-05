@@ -19,12 +19,11 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    # Create Resource Group (idempotent)
-    - name: Create Resource Group if not exists
+    - name: Create Resource Group (idempotent)
       run: |
-        if ! az group exists --name ntms-owasp-wp-rg; then
-          az group create --name ntms-owasp-wp-rg --location northeurope
-        fi
+       az group create \
+       --name ntms-owasp-wp-rg \
+       --location northeurope
 
     # Create VM (idempotent)
     - name: Create VM if not exists
