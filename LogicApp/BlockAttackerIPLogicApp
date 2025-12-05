@@ -1,0 +1,151 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "WhenAnAzureMonitorAlertIsFired": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {}
+                }
+            }
+        },
+        "actions": {
+            "Query_Logs": {
+                "runAfter": {},
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://management.azure.com/subscriptions/a0966ab9-54ed-40c3-927b-f64be45d0cee/resourceGroups/cloud-shell-storage-centralindia/providers/Microsoft.OperationalInsights/workspaces/ntmslaw/api/query?api-version=2020-08-01",
+                    "method": "POST",
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": {
+                        "query": "AzureDiagnostics | where Category == 'ApplicationGatewayFirewallLog' | where action_s == 'Blocked' or action_s == 'Matched' | where Message contains 'SQL' or Message contains 'Injection' or Message contains 'XSS' or Message contains '<script' | project TimeGenerated, clientIp_s, requestUri_s, Message | order by TimeGenerated desc | limit 1"
+                    },
+                    "authentication": {
+                        "type": "ManagedServiceIdentity"
+                    }
+                }
+            },
+            "Parse_IP": {
+                "runAfter": {
+                    "Query_Logs": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "@body('Query_Logs')?['tables']?[0]?['rows']?[0]?[1]"
+            },
+            "Get_WAF_Policy": {
+                "runAfter": {
+                    "Parse_IP": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://management.azure.com/subscriptions/a0966ab9-54ed-40c3-927b-f64be45d0cee/resourceGroups/ntms-owasp-wp-rg/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/waf1?api-version=2023-05-01",
+                    "method": "GET",
+                    "authentication": {
+                        "type": "ManagedServiceIdentity"
+                    }
+                }
+            },
+            "Initialize_ExistingIPs": {
+                "runAfter": {
+                    "Get_WAF_Policy": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ExistingIPs",
+                            "type": "Array",
+                            "value": "@coalesce(first(body('Get_WAF_Policy')?['properties']?['customRules'])?['matchConditions']?[0]?['matchValues'], array())"
+                        }
+                    ]
+                }
+            },
+            "Merge_IP_List": {
+                "runAfter": {
+                    "Initialize_ExistingIPs": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "@union(variables('ExistingIPs'), array(outputs('Parse_IP')))"
+            },
+            "Update_WAF_Policy": {
+                "runAfter": {
+                    "Merge_IP_List": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "method": "PUT",
+                    "uri": "https://management.azure.com/subscriptions/a0966ab9-54ed-40c3-927b-f64be45d0cee/resourceGroups/ntms-owasp-wp-rg/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/waf1?api-version=2023-05-01",
+                    "authentication": {
+                        "type": "ManagedServiceIdentity"
+                    },
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": {
+                        "location": "northeurope",
+                        "properties": {
+                            "policySettings": {
+                                "state": "Enabled",
+                                "mode": "Prevention"
+                            },
+                            "customRules": [
+                                {
+                                    "name": "BlockDynamicIPs",
+                                    "priority": 1,
+                                    "ruleType": "MatchRule",
+                                    "action": "Block",
+                                    "matchConditions": [
+                                        {
+                                            "matchVariables": [
+                                                {
+                                                    "variableName": "RemoteAddr"
+                                                }
+                                            ],
+                                            "operator": "IPMatch",
+                                            "matchValues": "@outputs('Merge_IP_List')"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "managedRules": {
+                                "managedRuleSets": [
+                                    {
+                                        "ruleSetType": "OWASP",
+                                        "ruleSetVersion": "3.2"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {}
+        }
+    }
+}
