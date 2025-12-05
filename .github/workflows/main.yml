@@ -11,22 +11,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Azure Login using azure_credentials
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Azure Login using azure_credentials
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Create Resource Group
-        run: |
-          az group create \
-            --name owasp-wp-rg \
-            --location centralindia
+    # -------------------------------
+    # Create Resource Group (idempotent)
+    # -------------------------------
+    - name: Create Resource Group if not exists
+      run: |
+        if ! az group exists --name owasp-wp-rg; then
+          echo "Creating resource group..."
+          az group create --name owasp-wp-rg --location centralindia
+        else
+          echo "Resource group already exists. Skipping."
+        fi
 
-      - name: Deploy OWASP WordPress VM (Password Auth)
-        run: |
+    # -------------------------------
+    # Deploy VM (idempotent)
+    # -------------------------------
+    - name: Deploy VM if not exists
+      run: |
+        if ! az vm show --resource-group owasp-wp-rg --name owaspwpvm >/dev/null 2>&1; then
+          echo "Creating VM..."
           az vm create \
             --resource-group owasp-wp-rg \
             --name owaspwpvm \
@@ -37,28 +48,47 @@ jobs:
             --authentication-type password \
             --custom-data cloud-init.txt \
             --public-ip-sku Standard
+        else
+          echo "VM already exists. Skipping."
+        fi
 
-      - name: Open Port 22 (SSH)
-        run: |
-          az vm open-port \
-            --resource-group owasp-wp-rg \
-            --name owaspwpvm22 \
-            --port 22
-            --priority 299
+    # -------------------------------
+    # Open ports (idempotent)
+    # -------------------------------
+    - name: Open SSH and HTTP only if needed
+      run: |
+        # Check if SSH rule exists
+        if ! az network nsg rule list \
+           --resource-group owasp-wp-rg \
+           --nsg-name owaspwpvmNSG \
+           --query "[?name=='allow_22']" \
+           | grep -q allow_22; then
+          echo "Opening port 22..."
+          az vm open-port --resource-group owasp-wp-rg --name owaspwpvm --port 22 --priority 1001 --rule-name allow_22
+        else
+          echo "Port 22 already open."
+        fi
 
-      - name: Open Port 80 (WordPress)
-        run: |
-          az vm open-port \
-            --resource-group owasp-wp-rg \
-            --name owaspwpvm80 \
-            --port 80
-            --priority 400
+        # Check if HTTP rule exists
+        if ! az network nsg rule list \
+           --resource-group owasp-wp-rg \
+           --nsg-name owaspwpvmNSG \
+           --query "[?name=='allow_80']" \
+           | grep -q allow_80; then
+          echo "Opening port 80..."
+          az vm open-port --resource-group owasp-wp-rg --name owaspwpvm --port 80 --priority 1002 --rule-name allow_80
+        else
+          echo "Port 80 already open."
+        fi
 
-      - name: Output Public IP
-        run: |
-          IP=$(az vm show -d -g owasp-wp-rg -n owaspwpvm --query publicIps -o tsv)
-          echo "======================================="
-          echo " WordPress URL: http://$IP"
-          echo " SSH: ssh azureuser@$IP"
-          echo " Password is stored in VM_ADMIN_PASSWORD GitHub Secret"
-          echo "======================================="
+    # -------------------------------
+    # Output Public IP
+    # -------------------------------
+    - name: Output Public IP
+      run: |
+        IP=$(az vm show -d -g owasp-wp-rg -n owaspwpvm --query publicIps -o tsv)
+        echo "======================================="
+        echo " WordPress URL: http://$IP"
+        echo " SSH: ssh azureuser@$IP"
+        echo " Password is stored in GitHub Secret"
+        echo "======================================="
