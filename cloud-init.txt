@@ -39,8 +39,64 @@ runcmd:
   - sed -i "s/username_here/wpuser/" /var/www/html/wp-config.php
   - sed -i "s/password_here/Password123!/" /var/www/html/wp-config.php
 
-  # Enable .htaccess for permalinks
+  # Enable .htaccess overrides
   - sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
   - systemctl restart apache2
 
-final_message: "OWASP WordPress VM deployment complete!"
+  #####################################################
+  # 📌 Install OWASP Vulnerable Plugins
+  #####################################################
+
+  # Create plugin directory if missing
+  - mkdir -p /var/www/html/wp-content/plugins/
+
+  # 1️⃣ File Manager 6.0 (Unauthenticated RCE)
+  - wget https://github.com/wp-plugins/wp-file-manager/archive/refs/tags/6.0.zip -O /tmp/filemanager.zip
+  - unzip /tmp/filemanager.zip -d /tmp/
+  - cp -r /tmp/wp-file-manager-6.0 /var/www/html/wp-content/plugins/file-manager
+
+  # 2️⃣ DVWA-style Unrestricted File Upload plugin
+  - mkdir -p /var/www/html/wp-content/plugins/unsafe-upload
+  - cat << 'EOF' > /var/www/html/wp-content/plugins/unsafe-upload/unsafe-upload.php
+<?php
+/*
+Plugin Name: Unsafe File Upload
+Description: Demonstrates unrestricted file upload (OWASP A6).
+Version: 1.0
+*/
+if ($_FILES) {
+    move_uploaded_file($_FILES['file']['tmp_name'], ABSPATH.'/'.$_FILES['file']['name']);
+    echo "Uploaded!";
+}
+function upload_form(){
+    echo '<form method="POST" enctype="multipart/form-data">
+            <input type="file" name="file"/>
+            <input type="submit" value="Upload"/>
+          </form>';
+}
+add_shortcode("upload_form","upload_form");
+?>
+EOF
+
+  # 3️⃣ XSS Demo Plugin
+  - mkdir -p /var/www/html/wp-content/plugins/xss-demo
+  - cat << 'EOF' > /var/www/html/wp-content/plugins/xss-demo/xss-demo.php
+<?php
+/*
+Plugin Name: XSS Demo Plugin
+Description: Demonstrates reflected XSS via shortcode.
+Version: 1.0
+*/
+function xss_test(){
+    $msg = $_GET['msg'];
+    return "<h3>User Message: $msg</h3>";
+}
+add_shortcode("xss", "xss_test");
+?>
+EOF
+
+  # Set permissions
+  - chown -R www-data:www-data /var/www/html/wp-content/plugins
+  - chmod -R 755 /var/www/html/wp-content/plugins
+
+final_message: "OWASP WordPress VM with vulnerable plugins deployed!"
