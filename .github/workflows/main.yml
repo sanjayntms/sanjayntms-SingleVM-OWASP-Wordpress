@@ -1,0 +1,62 @@
+name: Deploy OWASP WordPress VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login using azure_credentials
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name owasp-wp-rg \
+            --location centralindia
+
+      - name: Deploy OWASP WordPress VM (Password Auth)
+        run: |
+          az vm create \
+            --resource-group owasp-wp-rg \
+            --name owaspwpvm \
+            --image Ubuntu2204 \
+            --size Standard_B1s \
+            --admin-username azureuser \
+            --admin-password "${{ secrets.VM_ADMIN_PASSWORD }}" \
+            --authentication-type password \
+            --custom-data cloud-init.txt \
+            --public-ip-sku Standard
+
+      - name: Open Port 22 (SSH)
+        run: |
+          az vm open-port \
+            --resource-group owasp-wp-rg \
+            --name owaspwpvm \
+            --port 22
+
+      - name: Open Port 80 (WordPress)
+        run: |
+          az vm open-port \
+            --resource-group owasp-wp-rg \
+            --name owaspwpvm \
+            --port 80
+
+      - name: Output Public IP
+        run: |
+          IP=$(az vm show -d -g owasp-wp-rg -n owaspwpvm --query publicIps -o tsv)
+          echo "======================================="
+          echo " WordPress URL: http://$IP"
+          echo " SSH: ssh azureuser@$IP"
+          echo " Password is stored in VM_ADMIN_PASSWORD GitHub Secret"
+          echo "======================================="
