@@ -26,14 +26,14 @@ runcmd:
   - mysql -e "GRANT ALL PRIVILEGES ON wpdb.* TO 'wpuser'@'localhost';"
   - mysql -e "FLUSH PRIVILEGES;"
 
-  # Install WordPress (OWASP vulnerable version)
+  # Install WordPress (vulnerable version 5.0)
   - wget https://wordpress.org/wordpress-5.0.zip -P /tmp/
   - unzip /tmp/wordpress-5.0.zip -d /tmp/
   - cp -r /tmp/wordpress/* /var/www/html/
   - chown -R www-data:www-data /var/www/html
   - chmod -R 755 /var/www/html
 
-  # Auto-config wp-config.php
+  # Configure wp-config.php
   - cp /var/www/html/wp-config-sample.php /var/www/html/wp-config.php
   - sed -i "s/database_name_here/wpdb/" /var/www/html/wp-config.php
   - sed -i "s/username_here/wpuser/" /var/www/html/wp-config.php
@@ -43,25 +43,21 @@ runcmd:
   - sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
   - systemctl restart apache2
 
-  #####################################################
-  # 📌 Install OWASP Vulnerable Plugins
-  #####################################################
-
-  # Create plugin directory if missing
+  # Install vulnerable plugins
   - mkdir -p /var/www/html/wp-content/plugins/
 
-  # 1️⃣ File Manager 6.0 (Unauthenticated RCE)
+  # 1. File Manager 6.0 (RCE vulnerability CVE-2020-25213)
   - wget https://github.com/wp-plugins/wp-file-manager/archive/refs/tags/6.0.zip -O /tmp/filemanager.zip
   - unzip /tmp/filemanager.zip -d /tmp/
   - cp -r /tmp/wp-file-manager-6.0 /var/www/html/wp-content/plugins/file-manager
 
-  # 2️⃣ DVWA-style Unrestricted File Upload plugin
+  # 2. Unrestricted File Upload Plugin
   - mkdir -p /var/www/html/wp-content/plugins/unsafe-upload
   - cat << 'EOF' > /var/www/html/wp-content/plugins/unsafe-upload/unsafe-upload.php
 <?php
 /*
 Plugin Name: Unsafe File Upload
-Description: Demonstrates unrestricted file upload (OWASP A6).
+Description: Demonstrates unrestricted file upload vulnerability.
 Version: 1.0
 */
 if ($_FILES) {
@@ -78,25 +74,11 @@ add_shortcode("upload_form","upload_form");
 ?>
 EOF
 
-  # 3️⃣ XSS Demo Plugin
+  # 3. XSS Demo Plugin
   - mkdir -p /var/www/html/wp-content/plugins/xss-demo
   - cat << 'EOF' > /var/www/html/wp-content/plugins/xss-demo/xss-demo.php
 <?php
 /*
 Plugin Name: XSS Demo Plugin
 Description: Demonstrates reflected XSS via shortcode.
-Version: 1.0
-*/
-function xss_test(){
-    $msg = $_GET['msg'];
-    return "<h3>User Message: $msg</h3>";
-}
-add_shortcode("xss", "xss_test");
-?>
-EOF
-
-  # Set permissions
-  - chown -R www-data:www-data /var/www/html/wp-content/plugins
-  - chmod -R 755 /var/www/html/wp-content/plugins
-
-final_message: "OWASP WordPress VM with vulnerable plugins deployed!"
+Vers
