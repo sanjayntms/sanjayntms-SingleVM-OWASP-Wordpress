@@ -1,4 +1,4 @@
-name: Deploy OWASP WordPress VM
+name: Deploy WordPress VM
 
 on:
   workflow_dispatch:
@@ -11,40 +11,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-    # ---------------------------------------------------------
-    # Checkout
-    # ---------------------------------------------------------
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # ---------------------------------------------------------
-    # Azure Login
-    # ---------------------------------------------------------
-    - name: Azure Login using azure_credentials
+    - name: Azure Login
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    # ---------------------------------------------------------
-    # Create Resource Group (Idempotent)
-    # ---------------------------------------------------------
+    # Create Resource Group (idempotent)
     - name: Create Resource Group if not exists
       run: |
         if ! az group exists --name owasp-wp-rg; then
-          echo "Resource Group does not exist. Creating..."
           az group create --name owasp-wp-rg --location centralindia
-        else
-          echo "Resource Group already exists. Skipping."
         fi
 
-    # ---------------------------------------------------------
-    # Create VM (Idempotent)
-    # ---------------------------------------------------------
+    # Create VM (idempotent)
     - name: Create VM if not exists
       run: |
         if ! az vm show --resource-group owasp-wp-rg --name owaspwpvm >/dev/null 2>&1; then
-          echo "VM does not exist. Creating..."
           az vm create \
             --resource-group owasp-wp-rg \
             --name owaspwpvm \
@@ -53,66 +38,40 @@ jobs:
             --admin-username azureuser \
             --admin-password "${{ secrets.VM_ADMIN_PASSWORD }}" \
             --authentication-type password \
-            --custom-data cloud-init.txt \
             --public-ip-sku Standard
-        else
-          echo "VM already exists. Skipping."
         fi
 
-    # ---------------------------------------------------------
-    # Open SSH and HTTP ports (Idempotent)
-    # ---------------------------------------------------------
-    - name: Open SSH and HTTP if needed
+    # Open SSH and HTTP
+    - name: Open Ports
       run: |
-        # Detect NSG name dynamically
-        NSG=$(az network nsg list -g owasp-wp-rg --query "[].name" -o tsv)
-        echo "Detected NSG: $NSG"
+        az vm open-port --resource-group owasp-wp-rg --name owaspwpvm --port 22 --priority 1001
+        az vm open-port --resource-group owasp-wp-rg --name owaspwpvm --port 80 --priority 1002
 
-        echo "Checking SSH rule..."
-        SSH_RULE=$(az network nsg rule list \
-          --resource-group owasp-wp-rg \
-          --nsg-name "$NSG" \
-          --query "[?contains(destinationPortRange, '22')]" \
-          -o tsv)
-
-        if [ -z "$SSH_RULE" ]; then
-          echo "Opening port 22..."
-          az vm open-port \
-            --resource-group owasp-wp-rg \
-            --name owaspwpvm \
-            --port 22 \
-            --priority 1001
-        else
-          echo "Port 22 already open."
-        fi
-
-        echo "Checking HTTP rule..."
-        HTTP_RULE=$(az network nsg rule list \
-          --resource-group owasp-wp-rg \
-          --nsg-name "$NSG" \
-          --query "[?contains(destinationPortRange, '80')]" \
-          -o tsv)
-
-        if [ -z "$HTTP_RULE" ]; then
-          echo "Opening port 80..."
-          az vm open-port \
-            --resource-group owasp-wp-rg \
-            --name owaspwpvm \
-            --port 80 \
-            --priority 1002
-        else
-          echo "Port 80 already open."
-        fi
-
-    # ---------------------------------------------------------
-    # Output Public IP
-    # ---------------------------------------------------------
-    - name: Output Public IP
+    # Get Public IP
+    - name: Get VM Public IP
+      id: ip
       run: |
         IP=$(az vm show -d -g owasp-wp-rg -n owaspwpvm --query publicIps -o tsv)
-        echo "======================================="
-        echo " WordPress URL: http://$IP"
-        echo " SSH Command:"
-        echo " ssh azureuser@$IP"
-        echo " Password is stored in GitHub Secret (VM_ADMIN_PASSWORD)"
-        echo "======================================="
+        echo "IP=$IP" >> $GITHUB_OUTPUT
+
+    # Copy script to VM
+    - name: Upload WordPress setup script
+      run: |
+        sudo apt install -y sshpass
+        sshpass -p "${{ secrets.VM_ADMIN_PASSWORD }}" scp -o StrictHostKeyChecking=no setup-wordpress-auto.sh azureuser@${{ steps.ip.outputs.IP }}:/tmp/
+
+    # Run script on VM
+    - name: Execute WordPress install script
+      run: |
+        sshpass -p "${{ secrets.VM_ADMIN_PASSWORD }}" ssh -o StrictHostKeyChecking=no azureuser@${{ steps.ip.outputs.IP }} "chmod +x /tmp/setup-wordpress-auto.sh && sudo /tmp/setup-wordpress-auto.sh"
+
+    # Final Output
+    - name: Output WordPress URL
+      run: |
+        echo "====================================="
+        echo " WordPress deployed successfully!"
+        echo " URL: http://${{ steps.ip.outputs.IP }}"
+        echo " Admin: http://${{ steps.ip.outputs.IP }}/wp-admin"
+        echo " Username: admin"
+        echo " Password: Admin123!"
+        echo "====================================="
