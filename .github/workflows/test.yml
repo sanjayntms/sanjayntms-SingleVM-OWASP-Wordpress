@@ -15,3 +15,17 @@ jobs:
         run: |
           echo "This only runs AFTER you click Approve in Teams."
           # ADD YOUR REAL DEPLOYMENT SCRIPTS HERE
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+         creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Resource Group (idempotent)
+        run: |
+         az group create \
+          --name ntms-owasp-wp-rg \
+          --location northeurope
+
