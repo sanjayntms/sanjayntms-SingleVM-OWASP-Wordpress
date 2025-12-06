@@ -2,6 +2,11 @@ name: Deploy WordPress VM
 
 on:
   workflow_dispatch:
+    inputs:
+      approval:
+        description: "Approval result"
+        required: false
+        type: string
 
 permissions:
   contents: read
