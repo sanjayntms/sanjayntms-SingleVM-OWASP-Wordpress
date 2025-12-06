@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       approval:
-        description: "Approval result"
-        required: false
+        description: "Approval from Logic App"
+        required: true
         type: string
 
 permissions:
@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   deploy:
+    if: ${{ github.event.inputs.approval == 'approved' }}
     runs-on: ubuntu-latest
 
     steps:
