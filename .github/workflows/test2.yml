@@ -1,4 +1,4 @@
-name: Deploy WordPress VM
+name: Deploy WordPress VM LA
 
 on:
   workflow_dispatch:
