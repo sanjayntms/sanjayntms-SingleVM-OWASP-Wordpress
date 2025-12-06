@@ -1,0 +1,23 @@
+name: Deploy WordPress VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: "Approval from Logic App"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Call Logic App
+      run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"requestor": "${{ github.actor }}", "repo": "${{ github.repository }}"}' \
+          "${{ secrets.LOGIC_APP_URL }}"
