@@ -1,0 +1,17 @@
+name: 2. Deploy (Approved)
+
+on:
+  repository_dispatch:
+    types: [approved-deploy] # This MUST match the event_type in your Logic App
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Run Deployment
+        run: |
+          echo "This only runs AFTER you click Approve in Teams."
+          # ADD YOUR REAL DEPLOYMENT SCRIPTS HERE
