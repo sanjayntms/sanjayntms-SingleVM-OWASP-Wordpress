@@ -13,10 +13,14 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event.inputs.approval == 'approved' }}
     runs-on: ubuntu-latest
 
     steps:
+    - name: Call Logic App
+      run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"requestor": "${{ github.actor }}", "repo": "${{ github.repository }}"}' \
+          "${{ secrets.LOGIC_APP_URL }}"
     - name: Checkout repository
       uses: actions/checkout@v4
 
